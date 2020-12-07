@@ -1,0 +1,83 @@
+pipeline {
+    agent {
+        docker {
+            image 'maven:3-alpine' 
+            args '-v /root/.m2:/root/.m2' 
+        }
+    }
+    environment {
+        SH_PLAYPATH = "/usr/local/MyShellScripts"
+    }
+    stages {
+        stage('deploy') {
+          steps {
+            	echo '部署中...'
+            	script {
+            	  // 声明服务器信息
+            	  def remote = [:]
+            	  remote.name = 'dev-server'
+            	  remote.allowAnyHosts = true
+            	  remote.host = '服务器'
+            	  remote.port = 22
+            	  remote.user = '用户名'
+                  remote.password = '密码'
+            
+
+            	    sshCommand remote: remote, command: "cd ${SH_PLAYPATH}&& sh build-signal.sh"
+            	}
+            	echo '部署完成'
+            }
+        }
+    }
+    
+    post {
+        always  {
+                mail to: '邮箱', cc: '邮箱',
+                charset:'UTF-8', 
+				mimeType:'text/plain',
+                subject: "${JOB_NAME}-Build # ${BUILD_NUMBER} - ${currentBuild.result}",
+                body: """(邮件由Jenkins自动发出，请勿回复~)
+项目名称：${JOB_NAME}
+构建编号：${BUILD_NUMBER}
+构建地址：${BUILD_URL}
+构建输出日志：${JOB_URL}
+                """
+        }
+    }
+}
+
+
+
+# build-signal.sh shell脚本命令
+
+#!/bin/sh
+TOMCAT_HOME=
+BUILD_DIR=
+# LOG_DIR=/home/air/xxx-air/logs
+MAVEN_HOME=
+export JAVA_HOME=/usr/local/jdk1.8.0_102
+export JRE_HOME=$JAVA_HOME/jre
+export CLASSPATH=.:$JAVA_HOME/lib:$JRE_HOME/lib
+export PATH=$PATH:$JAVA_HOME/bin:$JRE_HOME/bin
+
+cd $BUILD_DIR  && git checkout dev && git pull 
+# mvn clean install -e
+# echo '********** legacy-backend  build sucess **********'
+
+cd $BUILD_DIR
+$MAVEN_HOME/bin/mvn clean  -Dmaven.test.skip=true  package -P local_vitual_5
+echo '********** legacy-backend package sucess **********'
+
+#$TOMCAT_HOME/bin/catalina.sh stop
+ps -ef | grep $TOMCAT_HOME | grep -v grep | awk '{print $2}' | sed -e "s/^/kill -9 /g" | sh -
+echo '********** server stoped **********'
+
+rm -rf $TOMCAT_HOME/webapps/*
+# rm -rf $TOMCAT_HOME/logs/*
+# rm -rf $LOG_DIR/xxx-air-api*
+
+cd $BUILD_DIR
+find . -iname "*.war" -type f -exec cp {} $TOMCAT_HOME/webapps \;
+$TOMCAT_HOME/bin/catalina.sh start
+echo '**********  server started... **********'
+

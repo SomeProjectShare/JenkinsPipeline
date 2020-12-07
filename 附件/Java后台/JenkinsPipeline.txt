@@ -1,0 +1,73 @@
+pipeline {
+    agent {
+        docker {
+            image 'maven:3-alpine' 
+            args '-v /root/.m2:/root/.m2' 
+        }
+    }
+    environment {
+        WAR_PLAYPATH = "/usr/local/war/signal"
+    }
+    stages {
+        stage('git clone') {
+            steps {
+                checkout([$class: 'GitSCM', 
+                branches: [[name: '*/dev']], 
+                doGenerateSubmoduleConfigurations: false, 
+                extensions: [], 
+                submoduleCfg: [], 
+                userRemoteConfigs: [[credentialsId: '认证id', 
+                    url: 'git地址']]])
+
+            }
+        }
+		
+        stage('Build') { 
+            steps {
+             sh 'mvn -DskipTests clean package  -P 环境tag  --settings jenkins/conf/settings.xml' 
+            }
+        }
+        stage('deploy') {
+          steps {
+            	echo '部署中...'
+            	script {
+            	  // 声明服务器信息
+            	  def remote = [:]
+            	  remote.name = 'dev-server'
+            	  remote.allowAnyHosts = true
+            	  remote.host = '部署服务器地址'
+            	  remote.port = 22
+            	  remote.user = '用户名'
+                  remote.password = '密码'
+            
+    
+                	// 删除
+            		sshCommand remote: remote, command: "rm -rf ${WAR_PLAYPATH}/*.war"
+            		// SSH 上传文件到远端服务器
+            		sshPut remote: remote, from: 'Jenkins打好war包', into: "${WAR_PLAYPATH}"
+     
+            	    sshCommand remote: remote, command: "cd ${WAR_PLAYPATH}&& sh build-signal.sh"
+            	}
+            	echo '部署完成'
+            }
+        }
+    }
+    
+    post {
+        failure {
+                mail to: '接收人邮箱',
+                subject: "Failed Pipeline: ${env.JOB_NAME}",
+                body: "Something is wrong with  : ${env.BUILD_URL} "
+        }
+
+        success {
+                mail to: '接收人邮箱', cc: '发送人',
+                // subject: "sucess build: ${currentBuild.fullDisplayName}",
+                
+                subject: """测试环境-${env.JOB_NAME} - has been released!""",
+                body: """ (测试环境) The ${env.JOB_NAME} was successfully constructed and released. \n
+                Build with Maven (version = 3.3.9)
+                """
+        }
+    }
+}
