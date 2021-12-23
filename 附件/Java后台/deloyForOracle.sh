@@ -93,7 +93,7 @@ echo "**Init dockerfile start: "${DOCKER_FILE}
 echo "FROM wangzunbin/tomcat8-sunjre8-alpine:1.0" > ${DOCKER_FILE}
 
 #格式为maintainer ，指定维护者的信息
-echo "MAINTAINER luoqy <290627601@qq.com>" >> ${DOCKER_FILE}
+echo "MAINTAINER luoqy <905192187@qq.com>" >> ${DOCKER_FILE}
 
 #指定一个环境变量，会被后续 RUN 指令使用，并在容器运行时保持
 echo "ENV WORK_DIR /usr/local/tomcat/" >> ${DOCKER_FILE}
